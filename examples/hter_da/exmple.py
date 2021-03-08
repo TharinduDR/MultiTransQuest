@@ -90,7 +90,11 @@ def test_text_pair_regression(caplog=None):
     result = model.inference_from_dicts(dicts=basic_texts)
 
     print(result)
+    result_values = []
+    for prediction in result.predictions:
+        result_values.append(prediction.pred)
 
+    print(result_values)
     assert np.isclose(result[0]["predictions"][0]["pred"], 0.7976, rtol=0.05)
     model.close_multiprocessing_pool()
 
