@@ -38,7 +38,7 @@ def test_text_pair_regression(caplog=None):
                                                 train_filename="sample.tsv",
                                                 dev_filename="sample.tsv",
                                                 test_filename=None,
-                                                data_dir=Path("temp"),
+                                                data_dir=Path("examples/hter_da/temp/"),
                                                 delimiter="\t")
 
     data_silo = DataSilo(
