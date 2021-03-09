@@ -1,6 +1,5 @@
 import os
 import shutil
-import csv
 from pathlib import Path
 import numpy as np
 from farm.data_handler.data_silo import DataSilo
@@ -15,9 +14,12 @@ from farm.utils import set_all_seeds, initialize_device_settings
 from farm.modeling.tokenization import Tokenizer
 from sklearn.model_selection import train_test_split
 
-from examples.common.normalizer import fit
+from examples.common.draw import draw_scatterplot, print_stat
+from examples.common.normalizer import fit, un_fit
+from examples.common.postprocess import format_submission
 from examples.common.reader import read_annotated_file, read_test_file
-from examples.hter_da.en_de.multitransquest_config import multitransquest_config, SEED, TEMP_DIRECTORY, MODEL_NAME
+from examples.hter_da.en_de.multitransquest_config import multitransquest_config, SEED, TEMP_DIRECTORY, MODEL_NAME, \
+    RESULT_FILE, RESULT_IMAGE, SUBMISSION_FILE
 
 if not os.path.exists(TEMP_DIRECTORY):
     os.makedirs(TEMP_DIRECTORY)
@@ -34,10 +36,21 @@ train = train[['original', 'translation', 'z_mean']]
 dev = dev[['original', 'translation', 'z_mean']]
 test = test[['index', 'original', 'translation']]
 
+
 index = test['index'].to_list()
 train = train.rename(columns={'original': 'text', 'translation': 'text_b', 'z_mean': 'label'}).dropna()
 dev = dev.rename(columns={'original': 'text', 'translation': 'text_b', 'z_mean': 'label'}).dropna()
 test = test.rename(columns={'original': 'text', 'translation': 'text_b'}).dropna()
+
+dev_sentences = []
+for dev_source, dev_translation in zip(dev['text'].tolist(), dev['text_b'].tolist()):
+    sentence_pair = {'text': (dev_source, dev_translation)}
+    dev_sentences.append(sentence_pair)
+
+test_sentences = []
+for test_source, test_translation in zip(test['text'].tolist(), test['text_b'].tolist()):
+    sentence_pair = {'text': (test_source, test_translation)}
+    test_sentences.append(sentence_pair)
 
 # test_sentence_pairs = list(map(list, zip(test['text_a'].to_list(), test['text_b'].to_list())))
 
@@ -45,6 +58,7 @@ train = fit(train, 'label')
 dev = fit(dev, 'label')
 
 dev_preds = np.zeros((len(dev), multitransquest_config["n_fold"]))
+test_preds = np.zeros((len(test), multitransquest_config["n_fold"]))
 for i in range(multitransquest_config["n_fold"]):
 
     if os.path.exists(multitransquest_config['output_dir']) and os.path.isdir(multitransquest_config['output_dir']):
@@ -63,9 +77,9 @@ for i in range(multitransquest_config["n_fold"]):
     train_df, eval_df = train_test_split(train, test_size=0.1, random_state=SEED * i)
 
     train_df.to_csv(os.path.join(multitransquest_config['cache_dir'], "train.tsv"), header=True, sep='\t',
-                    index=False, quoting=csv.QUOTE_NONE)
+                    index=False)
     eval_df.to_csv(os.path.join(multitransquest_config['cache_dir'], "eval.tsv"), header=True, sep='\t',
-                   index=False, quoting=csv.QUOTE_NONE)
+                   index=False)
 
     set_all_seeds(seed=SEED*i)
     device, n_gpu = initialize_device_settings(use_cuda=True)
@@ -124,18 +138,32 @@ for i in range(multitransquest_config["n_fold"]):
     model.save(save_dir)
     processor.save(save_dir)
 
-    basic_texts = [
-        {"text": ("how many times have real madrid won the champions league in a row",
-                  "They have also won the competition the most times in a row, winning it five times from 1956 to 1960")},
-        {"text": ("how many seasons of the blacklist are there on netflix", "Retrieved March 27 , 2018 .")},
-    ]
 
     model = Inferencer.load(save_dir)
-    result = model.inference_from_dicts(dicts=basic_texts)
+    dev_result = model.inference_from_dicts(dicts=dev_sentences)
+    test_result = model.inference_from_dicts(dicts=test_sentences)
 
-    result_values = []
-    for prediction in result[0]["predictions"]:
-        result_values.append(prediction["pred"])
+    dev_result_values = []
+    for prediction in dev_result[0]["predictions"]:
+        dev_result_values.append(prediction["pred"])
 
-    print(result_values)
+    test_result_values = []
+    for prediction in test_result[0]["predictions"]:
+        test_result_values.append(prediction["pred"])
+
     model.close_multiprocessing_pool()
+
+    dev_preds[:, i] = dev_result_values
+    test_preds[:, i] = test_result_values
+
+dev['predictions'] = dev_preds.mean(axis=1)
+test['predictions'] = test_preds.mean(axis=1)
+
+dev = un_fit(dev, 'label')
+dev = un_fit(dev, 'predictions')
+test = un_fit(test, 'predictions')
+dev.to_csv(os.path.join(TEMP_DIRECTORY, RESULT_FILE), header=True, sep='\t', index=False, encoding='utf-8')
+draw_scatterplot(dev, 'label', 'predictions', os.path.join(TEMP_DIRECTORY, RESULT_IMAGE), "English-German")
+print_stat(dev, 'label', 'predictions')
+format_submission(df=test, index=index, language_pair="en-de", method="TransQuest",
+                  path=os.path.join(TEMP_DIRECTORY, SUBMISSION_FILE))
