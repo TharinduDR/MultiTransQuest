@@ -142,8 +142,7 @@ for i in range(multitransquest_config["n_fold"]):
     model.save(save_dir)
     processor.save(save_dir)
 
-
-    model = Inferencer.load(save_dir)
+    model = Inferencer.load(save_dir, gpu=True, batch_size=multitransquest_config['eval_batch_size'])
     dev_result = model.inference_from_dicts(dicts=dev_sentences)
     test_result = model.inference_from_dicts(dicts=test_sentences)
 
