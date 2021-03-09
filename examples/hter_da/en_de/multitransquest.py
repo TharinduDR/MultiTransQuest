@@ -152,6 +152,7 @@ for i in range(multitransquest_config["n_fold"]):
         test_result_values.append(prediction["pred"])
 
     model.close_multiprocessing_pool()
+    del model
 
     dev_preds[:, i] = dev_result_values
     test_preds[:, i] = test_result_values
