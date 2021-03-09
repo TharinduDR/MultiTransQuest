@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 from farm.data_handler.data_silo import DataSilo
 from farm.data_handler.processor import TextPairRegressionProcessor
+from farm.evaluation.metrics import register_metrics
 from farm.infer import Inferencer
 from farm.modeling.adaptive_model import AdaptiveModel
 from farm.modeling.language_model import LanguageModel
@@ -20,6 +21,7 @@ from examples.common.postprocess import format_submission
 from examples.common.reader import read_annotated_file, read_test_file
 from examples.hter_da.en_de.multitransquest_config import multitransquest_config, SEED, TEMP_DIRECTORY, MODEL_NAME, \
     RESULT_FILE, RESULT_IMAGE, SUBMISSION_FILE
+from multitransquest.evaluation import pearson_corr
 
 if not os.path.exists(TEMP_DIRECTORY):
     os.makedirs(TEMP_DIRECTORY)
@@ -88,11 +90,13 @@ for i in range(multitransquest_config["n_fold"]):
     evaluate_every = multitransquest_config['evaluate_during_training_steps']
     lang_model = MODEL_NAME
 
+    register_metrics(name="pearson_correlation", implementation=pearson_corr)
+
     tokenizer = Tokenizer.load(pretrained_model_name_or_path=lang_model)
 
     processor = TextPairRegressionProcessor(tokenizer=tokenizer,
                                             label_list=None,
-                                            metric="f1_macro",
+                                            metric="pearson_correlation",
                                             max_seq_len=multitransquest_config['max_seq_length'],
                                             train_filename="train.tsv",
                                             dev_filename="eval.tsv",
