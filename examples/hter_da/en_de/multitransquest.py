@@ -59,8 +59,8 @@ for test_source, test_translation in zip(test['text'].tolist(), test['text_b'].t
 train = fit(train, 'label')
 dev = fit(dev, 'label')
 
-dev_preds = np.zeros((len(dev), multitransquest_config["n_fold"]))
-test_preds = np.zeros((len(test), multitransquest_config["n_fold"]))
+dev_preds = np.zeros((len(dev_sentences), multitransquest_config["n_fold"]))
+test_preds = np.zeros((len(test_sentences), multitransquest_config["n_fold"]))
 for i in range(multitransquest_config["n_fold"]):
 
     if os.path.exists(multitransquest_config['output_dir']) and os.path.isdir(multitransquest_config['output_dir']):
